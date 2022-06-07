@@ -178,12 +178,12 @@ impl Default for Topology {
 }
 
 #[derive(Debug, Clone)]
-struct FlowGraph {
+pub struct FlowGraph {
     nodes: HashMap<usize, HashSet<usize>>,
 }
 
 impl FlowGraph {
-    fn new(edges: &Vec<(usize, usize)>) -> Self {
+    pub fn new(edges: &Vec<(usize, usize)>) -> Self {
         let mut nodes: HashMap<usize, HashSet<usize>> = HashMap::with_capacity(edges.len());
 
         for (a, b) in edges {
@@ -207,6 +207,10 @@ impl FlowGraph {
         }
 
         FlowGraph { nodes }
+    }
+
+    pub fn get_nodes(&self) -> HashMap<usize, HashSet<usize>> {
+        self.nodes.clone()
     }
 
     fn max_flow(&self, s: usize, t: usize) -> usize {

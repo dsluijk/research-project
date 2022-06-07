@@ -78,7 +78,7 @@ where
         self.total_messages += 1;
     }
 
-    pub async fn to_label(&self) -> String {
+    pub async fn to_label(&self) -> usize {
         let node = self.to.read().await;
         node.get_label()
     }

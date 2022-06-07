@@ -12,7 +12,7 @@ pub struct FloodingAlgorithm {
 
 #[async_trait]
 impl Algorithm for FloodingAlgorithm {
-    fn new(_: String, _: Arc<Topology>) -> Self {
+    fn new(_: usize, _: Arc<Topology>) -> Self {
         Self {
             received: HashSet::new(),
         }
@@ -32,6 +32,7 @@ impl Algorithm for FloodingAlgorithm {
         }
 
         self.received.insert(id);
+        current.write().await.deliver(message.clone());
         let current = current.read().await;
         let edges = current.get_edges();
 
@@ -54,6 +55,7 @@ impl Algorithm for FloodingAlgorithm {
         T: Algorithm + Send + Sync + 'static,
     {
         self.received.insert(message.get_id());
+        current.write().await.deliver(message.clone());
         let node = current.read().await;
 
         for edge in node.get_edges() {

@@ -13,7 +13,7 @@ use crate::{node::Node, Message, Topology};
 
 #[async_trait]
 pub trait Algorithm {
-    fn new(node_id: String, topology: Arc<Topology>) -> Self;
+    fn new(node_id: usize, topology: Arc<Topology>) -> Self;
 
     async fn on_message<T>(
         &mut self,

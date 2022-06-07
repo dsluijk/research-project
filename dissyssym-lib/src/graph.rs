@@ -16,6 +16,8 @@ where
 {
     nodes: Vec<Arc<RwLock<Node<T>>>>,
     unresolved: Arc<AtomicU64>,
+    send_messages: Vec<Message>,
+    topology: Arc<Topology>,
 }
 
 impl<T> Graph<T>
@@ -28,7 +30,7 @@ where
         let unresolved = Arc::new(AtomicU64::new(0));
 
         for n in 0..topology.get_n() {
-            nodes.push(Node::new(n.to_string(), topology.clone()));
+            nodes.push(Node::new(n, topology.clone()));
         }
 
         for (a, b) in topology.get_edges() {
@@ -45,10 +47,17 @@ where
             nodes[n].write().await.set_faulty();
         }
 
-        Self { nodes, unresolved }
+        Self {
+            nodes,
+            unresolved,
+            topology,
+            send_messages: Vec::new(),
+        }
     }
 
-    pub async fn broadcast(&self, node: Arc<RwLock<Node<T>>>, msg: Message) {
+    pub async fn broadcast(&mut self, node: Arc<RwLock<Node<T>>>, msg: Message) {
+        self.send_messages.push(msg.clone());
+
         Node::broadcast(node, msg).await
     }
 
@@ -82,6 +91,27 @@ where
         }
 
         total
+    }
+
+    pub async fn get_delivered_broadcasts(&self) -> f64 {
+        let mut total = 0;
+
+        let n = self.topology.get_n();
+        let f = self.topology.get_faulty().len();
+
+        for node in &self.nodes {
+            let node = node.read().await;
+
+            if node.get_faulty() {
+                continue;
+            }
+
+            total += node.get_delivered().len();
+        }
+
+        let expected = self.send_messages.len() * (n - f);
+
+        (total as f64 / expected as f64) * 100.
     }
 
     async fn connect_nodes(

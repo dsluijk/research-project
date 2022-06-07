@@ -10,15 +10,16 @@ pub struct Node<T>
 where
     T: Algorithm + Send + Sync + 'static,
 {
-    label: String,
+    label: usize,
     faulty: bool,
     faultyness: f64,
     edges: Vec<Arc<RwLock<Edge<T>>>>,
     algo: Arc<RwLock<T>>,
+    delivered: Vec<Message>,
 }
 
 impl<T: Algorithm + Send + Sync + 'static> Node<T> {
-    pub fn new(label: String, topology: Arc<Topology>) -> Arc<RwLock<Self>> {
+    pub fn new(label: usize, topology: Arc<Topology>) -> Arc<RwLock<Self>> {
         let mut faultyness = thread_rng().gen();
         if faultyness < 0.3334 {
             faultyness = 1.;
@@ -26,10 +27,11 @@ impl<T: Algorithm + Send + Sync + 'static> Node<T> {
 
         Arc::new(RwLock::new(Node {
             faultyness,
-            label: label.clone(),
+            label,
             faulty: false,
-            algo: Arc::new(RwLock::new(T::new(label.clone(), topology.clone()))),
+            algo: Arc::new(RwLock::new(T::new(label, topology.clone()))),
             edges: Vec::new(),
+            delivered: Vec::new(),
         }))
     }
 
@@ -75,12 +77,24 @@ impl<T: Algorithm + Send + Sync + 'static> Node<T> {
         total
     }
 
+    pub fn deliver(&mut self, msg: Message) {
+        self.delivered.push(msg);
+    }
+
+    pub fn get_delivered(&self) -> Vec<Message> {
+        self.delivered.clone()
+    }
+
+    pub fn get_faulty(&self) -> bool {
+        self.faulty
+    }
+
     pub fn set_faulty(&mut self) {
         self.faulty = true;
     }
 
-    pub fn get_label(&self) -> String {
-        self.label.clone()
+    pub fn get_label(&self) -> usize {
+        self.label
     }
 }
 
