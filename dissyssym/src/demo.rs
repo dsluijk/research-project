@@ -8,7 +8,7 @@ use dissyssym_lib::{
 #[tokio::main]
 async fn main() {
     let mut topology = Topology::default();
-    topology.generate(25, 10, 2);
+    topology.generate(250, 20, 7);
     topology.write("./topology.txt").await;
 
     let topology = Arc::new(topology);

@@ -3,6 +3,14 @@ name = "dissyssym"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "demo"
+path = "src/demo.rs"
+
+[[bin]]
+name = "gentopology"
+path = "src/gentopology.rs"
+
 [dependencies]
 dissyssym-lib = { path = "../dissyssym-lib" }
 tokio = { version = "1.18.2", features = ["full"] }
