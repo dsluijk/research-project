@@ -6,9 +6,9 @@ use dissyssym_lib::Topology;
 async fn main() {
     for n in 2..18 {
         let n = n * n;
-        let mut c = n - 1;
+        let mut c = (n - 1).min(20);
 
-        while c > 1 {
+        while c > 1 && c < n {
             for t in 0..5 {
                 let file = format!("./topologies/{}-{}-{}.tpgy", n, c, t);
 
