@@ -21,8 +21,13 @@ async fn main() {
                     "Generating topology {}-{}-{}, this can take a while..",
                     n, c, t
                 );
+
                 let mut topology = Topology::default();
-                topology.generate(n, c, 0);
+                if !topology.generate(n, c, 0) {
+                    println!("Failed to generate topology, skipping for now..");
+                    continue;
+                }
+
                 topology.write(file).await;
             }
 

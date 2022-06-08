@@ -19,7 +19,7 @@ pub struct Topology {
 }
 
 impl Topology {
-    pub fn generate(&mut self, n: usize, c: usize, f: usize) {
+    pub fn generate(&mut self, n: usize, c: usize, f: usize) -> bool {
         assert!(c > 0, "Connectivity must be at least one.");
         assert!(n > c, "Connectivity has to be lower than total.");
 
@@ -31,9 +31,16 @@ impl Topology {
 
         self.n = n;
         let mut rng = thread_rng();
+        let mut attempt = 0;
 
         // Try to create a graph until it's valid.
         self.edges = loop {
+            attempt += 1;
+
+            if attempt > 50_000 {
+                return false;
+            }
+
             let edges = match Self::try_generate(&mut rng, n, c) {
                 Some(e) => e,
                 None => continue,
@@ -48,6 +55,7 @@ impl Topology {
 
         // Set some random nodes as faulty.
         self.faulty = (0..n).choose_multiple(&mut rng, f.try_into().unwrap());
+        true
     }
 
     pub async fn write(&self, path: impl AsRef<Path>) {
