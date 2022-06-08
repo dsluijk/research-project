@@ -37,7 +37,7 @@ impl Topology {
         self.edges = loop {
             attempt += 1;
 
-            if attempt > 50_000 {
+            if attempt > 25_000 {
                 return false;
             }
 
