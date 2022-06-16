@@ -1,7 +1,7 @@
 mod flooding;
 mod routed;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
@@ -9,11 +9,11 @@ use tokio::sync::RwLock;
 pub use flooding::FloodingAlgorithm;
 pub use routed::RoutedAlgorithm;
 
-use crate::{node::Node, Message, Topology};
+use crate::{node::Node, Message, RouteCache, Topology};
 
 #[async_trait]
 pub trait Algorithm {
-    fn new(node_id: usize, topology: Arc<Topology>) -> Self;
+    fn new(node_id: usize, topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Self;
 
     async fn on_message<T>(
         &mut self,

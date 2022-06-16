@@ -1,14 +1,16 @@
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     time::Duration,
 };
 
 use tokio::{sync::RwLock, time::sleep};
 
-use crate::{algorithms::Algorithm, edge::Edge, message::Message, node::Node, Topology};
+use crate::{
+    algorithms::Algorithm, edge::Edge, message::Message, node::Node, RouteCache, Topology,
+};
 
 pub struct Graph<T>
 where
@@ -24,13 +26,13 @@ impl<T> Graph<T>
 where
     T: Algorithm + Send + Sync + 'static,
 {
-    pub async fn new(topology: Arc<Topology>) -> Self {
+    pub async fn new(topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Self {
         let mut next_edge = 0;
         let mut nodes = Vec::with_capacity(topology.get_n());
         let unresolved = Arc::new(AtomicU64::new(0));
 
         for n in 0..topology.get_n() {
-            nodes.push(Node::new(n, topology.clone()));
+            nodes.push(Node::new(n, topology.clone(), route_cache.clone()));
         }
 
         for (a, b) in topology.get_edges() {

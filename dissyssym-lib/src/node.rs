@@ -1,9 +1,12 @@
-use std::{fmt::Display, sync::Arc};
+use std::{
+    fmt::Display,
+    sync::{Arc, Mutex},
+};
 
 use rand::{thread_rng, Rng};
 use tokio::sync::RwLock;
 
-use crate::{algorithms::Algorithm, edge::Edge, message::Message, Topology};
+use crate::{algorithms::Algorithm, edge::Edge, message::Message, RouteCache, Topology};
 
 #[derive(Debug)]
 pub struct Node<T>
@@ -19,7 +22,11 @@ where
 }
 
 impl<T: Algorithm + Send + Sync + 'static> Node<T> {
-    pub fn new(label: usize, topology: Arc<Topology>) -> Arc<RwLock<Self>> {
+    pub fn new(
+        label: usize,
+        topology: Arc<Topology>,
+        route_cache: Arc<Mutex<RouteCache>>,
+    ) -> Arc<RwLock<Self>> {
         let mut faultyness = thread_rng().gen();
         if faultyness < 0.3334 {
             faultyness = 1.;
@@ -29,7 +36,7 @@ impl<T: Algorithm + Send + Sync + 'static> Node<T> {
             faultyness,
             label,
             faulty: false,
-            algo: Arc::new(RwLock::new(T::new(label, topology.clone()))),
+            algo: Arc::new(RwLock::new(T::new(label, topology.clone(), route_cache))),
             edges: Vec::new(),
             delivered: Vec::new(),
         }))

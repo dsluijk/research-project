@@ -1,10 +1,13 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use super::Algorithm;
-use crate::{node::Node, Message, Topology};
+use crate::{node::Node, Message, RouteCache, Topology};
 
 pub struct FloodingAlgorithm {
     received: HashSet<String>,
@@ -12,7 +15,7 @@ pub struct FloodingAlgorithm {
 
 #[async_trait]
 impl Algorithm for FloodingAlgorithm {
-    fn new(_: usize, _: Arc<Topology>) -> Self {
+    fn new(_: usize, _: Arc<Topology>, _: Arc<Mutex<RouteCache>>) -> Self {
         Self {
             received: HashSet::new(),
         }

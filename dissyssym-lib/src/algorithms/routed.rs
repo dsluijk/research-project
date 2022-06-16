@@ -1,14 +1,13 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::Arc,
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
 };
 
 use async_trait::async_trait;
-use sha2::{Digest, Sha512};
 use tokio::sync::RwLock;
 
 use super::Algorithm;
-use crate::{node::Node, topology::FlowGraph, Message, Topology};
+use crate::{node::Node, topology::FlowGraph, Message, RouteCache, Topology};
 
 pub struct RoutedAlgorithm {
     received: HashSet<String>,
@@ -17,13 +16,16 @@ pub struct RoutedAlgorithm {
 
 #[async_trait]
 impl Algorithm for RoutedAlgorithm {
-    fn new(n: usize, topology: Arc<Topology>) -> Self {
+    fn new(n: usize, topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Self {
         let mut routes = HashMap::new();
         let nodes = FlowGraph::new(&topology.get_edges()).get_nodes();
         let f = topology.get_faulty().len();
 
         for (s, _) in &nodes {
-            routes.insert(*s, Self::build_routes(&nodes, f, *s, n));
+            routes.insert(
+                *s,
+                Self::build_routes(route_cache.clone(), &nodes, f, *s, n),
+            );
         }
 
         Self {
@@ -84,86 +86,15 @@ impl Algorithm for RoutedAlgorithm {
 
 impl RoutedAlgorithm {
     fn build_routes(
+        cache: Arc<Mutex<RouteCache>>,
         nodes: &HashMap<usize, HashSet<usize>>,
         f: usize,
         s: usize,
         n: usize,
     ) -> HashSet<usize> {
-        let mut q = VecDeque::new();
-        let mut node_paths: HashMap<usize, Vec<Vec<usize>>> = HashMap::new();
-
-        for (n, _) in nodes {
-            node_paths.insert(*n, Vec::new());
-        }
-
-        node_paths.insert(s, vec![vec![s]]);
-        q.push_back(vec![s]);
-
-        while !q.is_empty() {
-            let mut possible_paths: HashMap<usize, Vec<Vec<usize>>> = HashMap::new();
-            let changed = q.clone();
-            q.clear();
-
-            for path in changed {
-                let neigh = nodes.get(path.last().unwrap()).unwrap();
-
-                for other in neigh {
-                    let mut valid = true;
-                    let other_paths = node_paths.get(other).unwrap();
-
-                    for op in other_paths {
-                        for path_item in &path {
-                            if op.contains(&path_item) && *path_item != s {
-                                valid = false;
-                                break;
-                            }
-                        }
-
-                        if !valid {
-                            break;
-                        }
-                    }
-
-                    if valid {
-                        let mut new_path = path.clone();
-                        new_path.push(*other);
-
-                        if let Some(pl) = possible_paths.get_mut(other) {
-                            pl.push(new_path);
-                        } else {
-                            possible_paths.insert(*other, vec![new_path]);
-                        }
-                    }
-                }
-            }
-
-            for (node, paths) in possible_paths {
-                let mut ordered_hashed: Vec<(String, Vec<usize>)> = Vec::new();
-
-                for path in paths {
-                    let mut hasher = Sha512::new();
-
-                    for entry in &path {
-                        hasher.update(entry.to_string());
-                    }
-
-                    let hash = format!("{:X}", hasher.finalize());
-                    ordered_hashed.push((hash, path.clone()));
-                }
-
-                ordered_hashed.sort_by(|(a, _), (b, _)| a.cmp(b));
-                let existing = node_paths.get_mut(&node).unwrap();
-
-                for _ in 0..(f + 1 - existing.len()) {
-                    if let Some((_, p)) = ordered_hashed.pop() {
-                        existing.push(p.to_vec());
-                        q.push_back(p.to_vec());
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
+        let mut lock = cache.lock().unwrap();
+        let node_paths = lock.gen_routes(nodes, f, s);
+        drop(lock);
 
         let mut routes = HashSet::new();
         for neigh in nodes.get(&n).unwrap() {

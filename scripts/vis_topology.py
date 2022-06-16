@@ -1,8 +1,10 @@
+#!/usr/bin/python
+
 import networkx as nx
 import matplotlib.pyplot as plt
+import sys
 
-
-f = open("./topology.txt", "r")
+f = open(sys.argv[1], "r")
 lines = f.readlines()
 edges = []
 

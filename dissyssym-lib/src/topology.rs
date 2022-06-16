@@ -8,10 +8,12 @@ use rand::{
     prelude::{IteratorRandom, SliceRandom, ThreadRng},
     thread_rng,
 };
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio::{
+    fs::{read_to_string, File},
+    io::AsyncWriteExt,
+};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Topology {
     n: usize,
     edges: Vec<(usize, usize)>,
@@ -71,6 +73,48 @@ impl Topology {
         file.write_all(result.as_bytes())
             .await
             .expect("Failed to write content of the topology.");
+    }
+
+    pub async fn parse(path: impl AsRef<Path>, f: usize) -> Option<Self> {
+        let content = read_to_string(path)
+            .await
+            .expect("Failed to read topology file!");
+        let mut uniques = HashSet::new();
+        let mut edges = Vec::new();
+
+        for line in content.lines() {
+            let mut split = line.split(' ');
+            let a = split
+                .next()
+                .expect("Failed to get first edge.")
+                .parse::<usize>()
+                .expect("Failed to parse first edge as usize.");
+            let b = split
+                .next()
+                .expect("Failed to get second edge.")
+                .parse::<usize>()
+                .expect("Failed to parse first edge as usize.");
+
+            uniques.insert(a);
+            uniques.insert(b);
+
+            if a < b {
+                edges.push((a, b));
+            } else {
+                edges.push((b, a));
+            }
+        }
+
+        let n = uniques.len();
+
+        if n <= f * 2 {
+            return None;
+        }
+
+        let mut rng = thread_rng();
+        let faulty = (0..n).choose_multiple(&mut rng, f);
+
+        Some(Self { n, edges, faulty })
     }
 
     pub fn get_edges(&self) -> Vec<(usize, usize)> {

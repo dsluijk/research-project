@@ -11,6 +11,10 @@ path = "src/demo.rs"
 name = "gentopology"
 path = "src/gentopology.rs"
 
+[[bin]]
+name = "simulate"
+path = "src/simulate.rs"
+
 [dependencies]
 dissyssym-lib = { path = "../dissyssym-lib" }
 tokio = { version = "1.18.2", features = ["full"] }

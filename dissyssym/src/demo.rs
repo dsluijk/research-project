@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use dissyssym_lib::{
     algorithms::{FloodingAlgorithm, RoutedAlgorithm},
-    Graph, Message, Topology,
+    Graph, Message, RouteCache, Topology,
 };
 
 #[tokio::main]
@@ -12,8 +12,9 @@ async fn main() {
     topology.write("./topology.txt").await;
 
     let topology = Arc::new(topology);
+    let cache = Arc::new(Mutex::new(RouteCache::new()));
 
-    let mut g1: Graph<FloodingAlgorithm> = Graph::new(topology.clone()).await;
+    let mut g1: Graph<FloodingAlgorithm> = Graph::new(topology.clone(), cache.clone()).await;
     let sender1 = g1
         .get_nodes()
         .first()
@@ -27,7 +28,7 @@ async fn main() {
     let g1_delivered = g1.get_delivered_broadcasts().await;
     drop(g1);
 
-    let mut g2: Graph<RoutedAlgorithm> = Graph::new(topology.clone()).await;
+    let mut g2: Graph<RoutedAlgorithm> = Graph::new(topology.clone(), cache.clone()).await;
     let sender2 = g2
         .get_nodes()
         .first()
