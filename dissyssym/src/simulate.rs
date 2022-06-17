@@ -100,19 +100,17 @@ async fn run_simulation<T: Algorithm + Send + Sync + 'static>(
     };
 
     let now = Instant::now();
-    // Send 10 messages, with 75ms between
+    // Broadcast a message from a random sender.
     let mut rng = rand::thread_rng();
-    for i in 0..10 {
-        let sender = graph
-            .get_nodes()
-            .choose(&mut rng)
-            .expect("Failed to get random node.")
-            .clone();
-        let sender_id = sender.read().await.get_label();
-        graph
-            .broadcast(sender, Message::new(sender_id, i.to_string()))
-            .await;
-    }
+    let sender = graph
+        .get_nodes()
+        .choose(&mut rng)
+        .expect("Failed to get random node.")
+        .clone();
+    let sender_id = sender.read().await.get_label();
+    graph
+        .broadcast(sender, Message::new(sender_id, "msg".to_string()))
+        .await;
 
     // Wait till finish and collect results.
     graph.wait_settled().await;
