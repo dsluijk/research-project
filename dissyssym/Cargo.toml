@@ -19,3 +19,4 @@ path = "src/simulate.rs"
 dissyssym-lib = { path = "../dissyssym-lib" }
 tokio = { version = "1.18.2", features = ["full"] }
 rayon = "1.5.3"
+rand = "0.8.5"

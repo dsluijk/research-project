@@ -2,3 +2,4 @@ target
 *.lock
 topology.txt
 /.vscode
+results.data

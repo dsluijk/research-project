@@ -26,13 +26,17 @@ impl<T> Graph<T>
 where
     T: Algorithm + Send + Sync + 'static,
 {
-    pub async fn new(topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Self {
+    pub async fn new(topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Option<Self> {
         let mut next_edge = 0;
         let mut nodes = Vec::with_capacity(topology.get_n());
         let unresolved = Arc::new(AtomicU64::new(0));
 
         for n in 0..topology.get_n() {
-            nodes.push(Node::new(n, topology.clone(), route_cache.clone()));
+            let node = match Node::new(n, topology.clone(), route_cache.clone()) {
+                Some(n) => n,
+                None => return None,
+            };
+            nodes.push(node);
         }
 
         for (a, b) in topology.get_edges() {
@@ -49,12 +53,12 @@ where
             nodes[n].write().await.set_faulty();
         }
 
-        Self {
+        Some(Self {
             nodes,
             unresolved,
             topology,
             send_messages: Vec::new(),
-        }
+        })
     }
 
     pub async fn broadcast(&mut self, node: Arc<RwLock<Node<T>>>, msg: Message) {

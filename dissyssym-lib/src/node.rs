@@ -24,14 +24,19 @@ impl<T: Algorithm + Send + Sync + 'static> Node<T> {
         label: usize,
         topology: Arc<Topology>,
         route_cache: Arc<Mutex<RouteCache>>,
-    ) -> Arc<RwLock<Self>> {
-        Arc::new(RwLock::new(Node {
+    ) -> Option<Arc<RwLock<Self>>> {
+        let algo = match T::new(label, topology.clone(), route_cache) {
+            Some(a) => a,
+            None => return None,
+        };
+
+        Some(Arc::new(RwLock::new(Node {
             label,
             faulty: false,
-            algo: Arc::new(RwLock::new(T::new(label, topology.clone(), route_cache))),
+            algo: Arc::new(RwLock::new(algo)),
             edges: Vec::new(),
             delivered: Vec::new(),
-        }))
+        })))
     }
 
     pub async fn broadcast(node: Arc<RwLock<Node<T>>>, msg: Message) {

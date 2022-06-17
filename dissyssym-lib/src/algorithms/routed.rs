@@ -16,22 +16,24 @@ pub struct RoutedAlgorithm {
 
 #[async_trait]
 impl Algorithm for RoutedAlgorithm {
-    fn new(n: usize, topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Self {
+    fn new(n: usize, topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Option<Self> {
         let mut routes = HashMap::new();
         let nodes = FlowGraph::new(&topology.get_edges()).get_nodes();
         let f = topology.get_faulty().len();
 
         for (s, _) in &nodes {
-            routes.insert(
-                *s,
-                Self::build_routes(route_cache.clone(), &nodes, f, *s, n),
-            );
+            let route = match Self::build_routes(route_cache.clone(), &nodes, f, *s, n) {
+                Some(r) => r,
+                None => return None,
+            };
+
+            routes.insert(*s, route);
         }
 
-        Self {
+        Some(Self {
             routes,
             received: HashSet::new(),
-        }
+        })
     }
 
     async fn on_message<T>(
@@ -91,11 +93,12 @@ impl RoutedAlgorithm {
         f: usize,
         s: usize,
         n: usize,
-    ) -> HashSet<usize> {
+    ) -> Option<HashSet<usize>> {
         let mut lock = cache.lock().unwrap();
-        match lock.gen_routes(nodes, f, s).get(&n) {
-            Some(routes) => routes.clone(),
-            None => panic!("Failed to generate routes."),
+
+        match lock.gen_routes(nodes, f, s) {
+            Some(r) => r.get(&n).map(|r| r.clone()),
+            None => return None,
         }
     }
 }

@@ -1,13 +1,17 @@
 use std::{
-    fs,
+    fs::{self, File},
+    io::Write,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use dissyssym_lib::{
     algorithms::{Algorithm, FloodingAlgorithm, RoutedAlgorithm},
     Graph, Message, RouteCache, Topology,
 };
+use rand::prelude::SliceRandom;
 use rayon::prelude::*;
+use tokio::time::Instant;
 
 #[tokio::main]
 async fn main() {
@@ -22,87 +26,97 @@ async fn main() {
     let handle = tokio::runtime::Handle::current();
     let _ = handle.enter();
 
-    entries.par_iter().for_each(|path| {
-        if path
-            .file_name()
-            .unwrap()
-            .to_owned()
-            .into_string()
-            .unwrap()
-            .split("-")
-            .next()
-            .unwrap()
-            .len()
-            > 1
-        {
-            return;
-        }
+    let totalf = Mutex::new(0);
+    let totalr = Mutex::new(0);
+    let results = Mutex::new(File::create("./results.data").unwrap());
 
-        for f in 1.. {
+    entries.par_iter().for_each(|path| {
+        for f in 0.. {
             let top = match handle.block_on(Topology::parse(path.clone(), f)) {
                 Some(top) => Arc::new(top),
                 None => break,
             };
 
-            if top.get_n() < 3 {
-                continue;
-            }
-
-            for _ in 0..5 {
+            for i in 0..5 {
                 let resf = handle.block_on(run_simulation::<FloodingAlgorithm>(
                     top.clone(),
                     cache.clone(),
                 ));
-
-                if resf.is_none() {
-                    println!("Failed to run flooding sim.");
-                    std::process::exit(1);
-                }
-
                 let resr = handle.block_on(run_simulation::<RoutedAlgorithm>(
                     top.clone(),
                     cache.clone(),
                 ));
 
-                if resr.is_none() {
-                    println!("Failed to run routed sim.");
-                    std::process::exit(1);
-                }
+                let resf = match resf {
+                    Some(r) => r,
+                    None => continue,
+                };
+                let resr = match resr {
+                    Some(r) => r,
+                    None => continue,
+                };
 
-                let resf = resf.unwrap();
-                let resr = resr.unwrap();
-
-                println!(
-                    "f: {} | {}, r: {} | {}",
-                    resf.delivered, resf.messages, resr.delivered, resr.messages
+                let result = format!(
+                    "[n: {}, f: {}, c: {}, i: {}] f: d {}%, m {}, t: {} | r: d {}%, m {}, t: {}\n",
+                    top.get_n(),
+                    top.get_faulty().len(),
+                    top.get_c(),
+                    i,
+                    resf.delivered,
+                    resf.messages,
+                    resf.duration.as_millis(),
+                    resr.delivered,
+                    resr.messages,
+                    resr.duration.as_millis()
                 );
+
+                results.lock().unwrap().write(result.as_bytes()).unwrap();
+                print!("{}", result);
+
+                *totalf.lock().unwrap() += resf.messages;
+                *totalr.lock().unwrap() += resr.messages;
+
+                if resf.delivered < 99.995 || resr.delivered < 99.995 {
+                    panic!("oh no, delivery is bad again :(");
+                }
             }
         }
     });
+
+    println!(
+        "Total messages: {} vs {}",
+        totalf.lock().unwrap(),
+        totalr.lock().unwrap()
+    );
 }
 
 async fn run_simulation<T: Algorithm + Send + Sync + 'static>(
     top: Arc<Topology>,
     cache: Arc<Mutex<RouteCache>>,
 ) -> Option<SimResult> {
-    let mut graph: Graph<T> = Graph::new(top.clone(), cache).await;
+    let mut graph: Graph<T> = match Graph::new(top.clone(), cache).await {
+        Some(g) => g,
+        None => return None,
+    };
 
-    // Send first message.
-    let sender1 = graph
-        .get_nodes()
-        .first()
-        .expect("Failed to get the first node.")
-        .clone();
-    let sender1_id = sender1.read().await.get_label();
-    graph
-        .broadcast(
-            sender1,
-            Message::new(sender1_id, "singlemessage".to_string()),
-        )
-        .await;
+    let now = Instant::now();
+    // Send 10 messages, with 75ms between
+    let mut rng = rand::thread_rng();
+    for i in 0..10 {
+        let sender = graph
+            .get_nodes()
+            .choose(&mut rng)
+            .expect("Failed to get random node.")
+            .clone();
+        let sender_id = sender.read().await.get_label();
+        graph
+            .broadcast(sender, Message::new(sender_id, i.to_string()))
+            .await;
+    }
 
     // Wait till finish and collect results.
     graph.wait_settled().await;
+    let duration = now.elapsed();
     let messages = graph.get_total_messages().await;
     let delivered = graph.get_delivered_broadcasts().await;
 
@@ -112,12 +126,14 @@ async fn run_simulation<T: Algorithm + Send + Sync + 'static>(
         n: top.get_n(),
         messages: messages as usize,
         delivered,
+        duration,
     })
 }
 
 struct SimResult {
     delivered: f64,
     messages: usize,
+    duration: Duration,
     c: usize,
     f: usize,
     n: usize,

@@ -12,8 +12,12 @@ pub use routed::RoutedAlgorithm;
 use crate::{node::Node, Message, RouteCache, Topology};
 
 #[async_trait]
-pub trait Algorithm {
-    fn new(node_id: usize, topology: Arc<Topology>, route_cache: Arc<Mutex<RouteCache>>) -> Self;
+pub trait Algorithm: Sized {
+    fn new(
+        node_id: usize,
+        topology: Arc<Topology>,
+        route_cache: Arc<Mutex<RouteCache>>,
+    ) -> Option<Self>;
 
     async fn on_message<T>(
         &mut self,

@@ -12,7 +12,7 @@ use crate::topology::FlowGraph;
 const GENERATION_METHOD: &str = "pathfind";
 
 pub struct RouteCache {
-    cache: HashMap<String, Arc<HashMap<usize, HashSet<usize>>>>,
+    cache: HashMap<String, Option<Arc<HashMap<usize, HashSet<usize>>>>>,
 }
 
 impl RouteCache {
@@ -27,13 +27,16 @@ impl RouteCache {
         nodes: &HashMap<usize, HashSet<usize>>,
         f: usize,
         s: usize,
-    ) -> Arc<HashMap<usize, HashSet<usize>>> {
+    ) -> Option<Arc<HashMap<usize, HashSet<usize>>>> {
         let hash = Self::hash_params(nodes, f, s);
 
         match self.cache.get(&hash) {
             Some(routes) => routes.clone(),
             None => {
-                let routes = Arc::new(Self::gen_routes_uncached(nodes, f, s));
+                let routes = match Self::gen_routes_uncached(nodes, f, s) {
+                    Some(r) => Some(Arc::new(r)),
+                    None => None,
+                };
                 self.cache.insert(hash, routes.clone());
 
                 routes
@@ -45,8 +48,7 @@ impl RouteCache {
         nodes: &HashMap<usize, HashSet<usize>>,
         f: usize,
         s: usize,
-    ) -> HashMap<usize, HashSet<usize>> {
-        println!("starting");
+    ) -> Option<HashMap<usize, HashSet<usize>>> {
         match GENERATION_METHOD {
             "pathfind" => Self::gen_method_pathfind(nodes, f, s),
             "unreliable" => Self::gen_method_unreliable(nodes, f, s),
@@ -58,7 +60,7 @@ impl RouteCache {
         nodes: &HashMap<usize, HashSet<usize>>,
         f: usize,
         s: usize,
-    ) -> HashMap<usize, HashSet<usize>> {
+    ) -> Option<HashMap<usize, HashSet<usize>>> {
         let mut routes = HashMap::new();
         let mut used = HashMap::new();
         let mut accepted = HashMap::new();
@@ -69,14 +71,13 @@ impl RouteCache {
             accepted.insert(n, 0);
         }
 
-        accepted.insert(s, f + 1);
+        let s_nodes = nodes.get(&s).unwrap();
+        routes.insert(s, s_nodes.clone());
 
-        // let sn = nodes.get(&s).unwrap();
-        // routes.insert(s, sn.clone());
-        // for &neigh in sn {
-        //     accepted.insert(neigh, 1);
-        //     // used.insert(neigh, HashSet::from([s]));
-        // }
+        for &neigh in s_nodes {
+            *accepted.get_mut(&neigh).unwrap() = 1;
+            used.get_mut(&neigh).unwrap().insert(s);
+        }
 
         while !accepted.iter().all(|(&i, &a)| a > f || i == s) {
             let consider = HashSet::from([s]);
@@ -88,7 +89,10 @@ impl RouteCache {
                 None => break,
             };
 
-            let path = Self::gen_method_pathfind_path(s, t, nodes, &used, &routes).unwrap();
+            let path = match Self::gen_method_pathfind_path(s, t, nodes, &used, &routes) {
+                Some(p) => p,
+                None => return None,
+            };
 
             accepted.insert(t, accepted.get(&t).unwrap() + 1);
 
@@ -98,7 +102,7 @@ impl RouteCache {
             }
         }
 
-        routes
+        Some(routes)
     }
 
     fn gen_method_pathfind_target(
@@ -163,21 +167,45 @@ impl RouteCache {
 
             for path in &potential {
                 let conn = Self::gen_method_pathfind_partial_connectivity(nodes, used, &path, s, t);
+                let mut overlap = 0;
 
-                if let Some((_, best_conn)) = best {
+                for other in &potential {
+                    for i in 1..(other.len() - 1) {
+                        if path.contains(&other[i]) {
+                            overlap += 1;
+                        }
+                    }
+                }
+
+                let mut add = 0;
+                for i in 0..(path.len() - 1) {
+                    if routes.get(&path[i]).unwrap().contains(&path[i + 1]) {
+                        continue;
+                    }
+
+                    add += 1;
+                }
+
+                if let Some((_, best_conn, best_overlap, best_add)) = best {
                     if best_conn > conn {
                         continue;
                     }
 
-                    // TODO: check which path needs to add the least amount of additional connections.
-                    // Needs to be already correct though..
-                    best = Some((path, conn));
+                    if best_overlap < overlap && best_conn == conn {
+                        continue;
+                    }
+
+                    if best_add <= add && best_overlap == overlap && best_conn == conn {
+                        continue;
+                    }
+
+                    best = Some((path, conn, overlap, add));
                 } else {
-                    best = Some((path, conn));
+                    best = Some((path, conn, overlap, add));
                 }
             }
 
-            if let Some((path, _)) = best {
+            if let Some((path, _, _, _)) = best {
                 return Some(path.clone());
             }
         }
@@ -265,7 +293,7 @@ impl RouteCache {
         nodes: &HashMap<usize, HashSet<usize>>,
         f: usize,
         s: usize,
-    ) -> HashMap<usize, HashSet<usize>> {
+    ) -> Option<HashMap<usize, HashSet<usize>>> {
         let mut q = VecDeque::new();
         let mut node_paths: HashMap<usize, Vec<Vec<usize>>> = HashMap::new();
 
@@ -365,7 +393,7 @@ impl RouteCache {
             routes.insert(n, to);
         }
 
-        routes
+        Some(routes)
     }
 
     fn hash_params(nodes: &HashMap<usize, HashSet<usize>>, f: usize, s: usize) -> String {
@@ -392,78 +420,6 @@ impl RouteCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn pathfind_path_single() {
-        let mut nodes = HashMap::new();
-        nodes.insert(1, HashSet::from([2, 3]));
-        nodes.insert(2, HashSet::from([1, 3, 4, 5]));
-        nodes.insert(3, HashSet::from([1, 2, 4]));
-        nodes.insert(4, HashSet::from([2, 3, 5, 6]));
-        nodes.insert(5, HashSet::from([2, 4, 6]));
-        nodes.insert(6, HashSet::from([4, 5]));
-
-        let used = HashMap::from([
-            (1, HashSet::new()),
-            (2, HashSet::new()),
-            (3, HashSet::new()),
-            (4, HashSet::new()),
-            (5, HashSet::new()),
-            (6, HashSet::new()),
-        ]);
-
-        for _ in 0..10 {
-            let path =
-                RouteCache::gen_method_pathfind_path(1, 6, &nodes, &used, &HashMap::new()).unwrap();
-            assert!(
-                path == vec![1, 2, 5, 6] || path == vec![1, 3, 4, 6],
-                "Path {:?} is invalid!",
-                path
-            );
-        }
-    }
-
-    #[test]
-    fn pathfind_connectivity_single() {
-        let mut nodes = HashMap::new();
-        nodes.insert(1, HashSet::from([2, 3]));
-        nodes.insert(2, HashSet::from([1, 3, 4, 5]));
-        nodes.insert(3, HashSet::from([1, 2, 4]));
-        nodes.insert(4, HashSet::from([2, 3, 5, 6]));
-        nodes.insert(5, HashSet::from([2, 4, 6]));
-        nodes.insert(6, HashSet::from([4, 5]));
-
-        let used = HashMap::from([
-            (1, HashSet::new()),
-            (2, HashSet::new()),
-            (3, HashSet::new()),
-            (4, HashSet::new()),
-            (5, HashSet::new()),
-            (6, HashSet::new()),
-        ]);
-
-        let connect =
-            RouteCache::gen_method_pathfind_partial_connectivity(&nodes, &used, &vec![], 1, 6);
-        assert_eq!(connect, 2);
-
-        let connect = RouteCache::gen_method_pathfind_partial_connectivity(
-            &nodes,
-            &used,
-            &vec![1, 2, 5, 6],
-            1,
-            6,
-        );
-        assert_eq!(connect, 1);
-
-        let connect = RouteCache::gen_method_pathfind_partial_connectivity(
-            &nodes,
-            &used,
-            &vec![1, 2, 4, 6],
-            1,
-            6,
-        );
-        assert_eq!(connect, 0);
-    }
 
     #[test]
     fn pathfind_connectivity_cutoff() {

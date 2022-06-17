@@ -15,10 +15,10 @@ pub struct FloodingAlgorithm {
 
 #[async_trait]
 impl Algorithm for FloodingAlgorithm {
-    fn new(_: usize, _: Arc<Topology>, _: Arc<Mutex<RouteCache>>) -> Self {
-        Self {
+    fn new(_: usize, _: Arc<Topology>, _: Arc<Mutex<RouteCache>>) -> Option<Self> {
+        Some(Self {
             received: HashSet::new(),
-        }
+        })
     }
 
     async fn on_message<T: 'static>(

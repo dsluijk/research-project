@@ -14,7 +14,8 @@ async fn main() {
     let topology = Arc::new(topology);
     let cache = Arc::new(Mutex::new(RouteCache::new()));
 
-    let mut g1: Graph<FloodingAlgorithm> = Graph::new(topology.clone(), cache.clone()).await;
+    let mut g1: Graph<FloodingAlgorithm> =
+        Graph::new(topology.clone(), cache.clone()).await.unwrap();
     let sender1 = g1
         .get_nodes()
         .first()
@@ -28,7 +29,7 @@ async fn main() {
     let g1_delivered = g1.get_delivered_broadcasts().await;
     drop(g1);
 
-    let mut g2: Graph<RoutedAlgorithm> = Graph::new(topology.clone(), cache.clone()).await;
+    let mut g2: Graph<RoutedAlgorithm> = Graph::new(topology.clone(), cache.clone()).await.unwrap();
     let sender2 = g2
         .get_nodes()
         .first()
