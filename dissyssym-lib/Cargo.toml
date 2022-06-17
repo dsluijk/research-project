@@ -8,5 +8,5 @@ rand = "0.8.5"
 rand_distr = "0.4.3"
 tokio = { version = "1.18.2", features = ["full"] }
 async-trait = "0.1.53"
-pathfinding = "3.0.12"
 sha2 = "0.10.2"
+priority-queue = "1.2.2"

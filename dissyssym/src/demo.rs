@@ -9,7 +9,7 @@ use dissyssym_lib::{
 async fn main() {
     let mut topology = Topology::default();
     topology.generate(250, 20, 7);
-    topology.write("./topology.txt").await;
+    topology.write("./topology.txt");
 
     let topology = Arc::new(topology);
     let cache = Arc::new(Mutex::new(RouteCache::new()));

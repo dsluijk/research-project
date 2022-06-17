@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use rand::{thread_rng, Rng};
 use tokio::sync::RwLock;
 
 use crate::{algorithms::Algorithm, edge::Edge, message::Message, RouteCache, Topology};
@@ -15,7 +14,6 @@ where
 {
     label: usize,
     faulty: bool,
-    faultyness: f64,
     edges: Vec<Arc<RwLock<Edge<T>>>>,
     algo: Arc<RwLock<T>>,
     delivered: Vec<Message>,
@@ -27,13 +25,7 @@ impl<T: Algorithm + Send + Sync + 'static> Node<T> {
         topology: Arc<Topology>,
         route_cache: Arc<Mutex<RouteCache>>,
     ) -> Arc<RwLock<Self>> {
-        let mut faultyness = thread_rng().gen();
-        if faultyness < 0.3334 {
-            faultyness = 1.;
-        }
-
         Arc::new(RwLock::new(Node {
-            faultyness,
             label,
             faulty: false,
             algo: Arc::new(RwLock::new(T::new(label, topology.clone(), route_cache))),
@@ -56,7 +48,7 @@ impl<T: Algorithm + Send + Sync + 'static> Node<T> {
         let node_lock = node.read().await;
         let algo = node_lock.algo.clone();
 
-        if node_lock.faulty && node_lock.faultyness >= thread_rng().gen() {
+        if node_lock.faulty {
             return;
         }
 

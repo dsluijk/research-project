@@ -1,17 +1,14 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
+    io::Write,
     path::Path,
 };
 
-use pathfinding::prelude::bfs;
 use rand::{
     prelude::{IteratorRandom, SliceRandom, ThreadRng},
     thread_rng,
 };
-use tokio::{
-    fs::{read_to_string, File},
-    io::AsyncWriteExt,
-};
+use tokio::fs::read_to_string;
 
 #[derive(Debug, Clone)]
 pub struct Topology {
@@ -25,11 +22,9 @@ impl Topology {
         assert!(c > 0, "Connectivity must be at least one.");
         assert!(n > c, "Connectivity has to be lower than total.");
 
-        let c = match n * c % 2 {
-            0 => c,
-            1 => c + 1,
-            _ => unreachable!(),
-        };
+        if n * c % 2 == 1 {
+            return false;
+        }
 
         self.n = n;
         let mut rng = thread_rng();
@@ -60,23 +55,21 @@ impl Topology {
         true
     }
 
-    pub async fn write(&self, path: impl AsRef<Path>) {
-        let mut file = File::create(path)
-            .await
-            .expect("Failed to create file for topology.");
+    pub fn write(&self, path: impl AsRef<Path>) {
         let mut result = String::new();
 
         for (n1, n2) in &self.edges {
             result.push_str(format!("{} {}\n", n1, n2).as_str());
         }
 
-        file.write_all(result.as_bytes())
-            .await
-            .expect("Failed to write content of the topology.");
+        std::fs::File::create(path)
+            .expect("Failed to create file for topology.")
+            .write_all(result.as_bytes())
+            .expect("Failed to write content of the topology.")
     }
 
     pub async fn parse(path: impl AsRef<Path>, f: usize) -> Option<Self> {
-        let content = read_to_string(path)
+        let content = read_to_string(&path)
             .await
             .expect("Failed to read topology file!");
         let mut uniques = HashSet::new();
@@ -106,8 +99,7 @@ impl Topology {
         }
 
         let n = uniques.len();
-
-        if n <= f * 2 {
+        if Self::connectivity(&edges, n) <= f {
             return None;
         }
 
@@ -127,6 +119,10 @@ impl Topology {
 
     pub fn get_faulty(&self) -> Vec<usize> {
         self.faulty.clone()
+    }
+
+    pub fn get_c(&self) -> usize {
+        Self::connectivity(&self.edges, self.get_n())
     }
 
     fn try_generate(rng: &mut ThreadRng, n: usize, d: usize) -> Option<Vec<(usize, usize)>> {
@@ -203,10 +199,13 @@ impl Topology {
         false
     }
 
-    fn connectivity(edges: &Vec<(usize, usize)>, n: usize) -> usize {
+    pub fn connectivity(edges: &Vec<(usize, usize)>, n: usize) -> usize {
+        let flowgraph = FlowGraph::new(edges);
         let mut min = n;
 
-        let flowgraph = FlowGraph::new(edges);
+        for (_, outgoing) in flowgraph.get_nodes() {
+            min = min.min(outgoing.len());
+        }
 
         for i in 0..n {
             for j in (i + 1)..n {
@@ -242,19 +241,13 @@ impl FlowGraph {
             if let Some(node) = nodes.get_mut(&a) {
                 node.insert(*b);
             } else {
-                let mut new_node = HashSet::new();
-                new_node.insert(*b);
-
-                nodes.insert(*a, new_node);
+                nodes.insert(*a, HashSet::from([*b]));
             }
 
             if let Some(node) = nodes.get_mut(&b) {
                 node.insert(*a);
             } else {
-                let mut new_node = HashSet::new();
-                new_node.insert(*a);
-
-                nodes.insert(*b, new_node);
+                nodes.insert(*b, HashSet::from([*a]));
             }
         }
 
@@ -265,54 +258,75 @@ impl FlowGraph {
         self.nodes.clone()
     }
 
-    fn max_flow(&self, s: usize, t: usize) -> usize {
+    pub fn max_flow(&self, s: usize, t: usize) -> usize {
+        if !self.nodes.contains_key(&s) {
+            return 0;
+        }
+
+        if !self.nodes.contains_key(&t) {
+            return 0;
+        }
+
         if s == t {
             return 0;
         }
 
-        let mut used = HashSet::new();
-        let mut edges: HashSet<(usize, usize)> = HashSet::new();
+        let mut flowing: HashSet<(usize, usize)> = HashSet::new();
+        loop {
+            let mut q = VecDeque::from([s]);
+            let mut pred = HashMap::new();
+            let mut coloured = HashSet::new();
 
-        while let Some(path) = bfs(
-            &s,
-            |&i| {
-                self.nodes
-                    .get(&i)
-                    .unwrap()
-                    .into_iter()
-                    .copied()
-                    .filter(|&n| {
-                        !edges.contains(&(i, n)) && ((!used.contains(&n)) || n == s || n == t)
-                    })
-                    .collect::<Vec<usize>>()
-            },
-            |&n| n == t,
-        ) {
-            for i in 0..path.len() {
-                used.insert(path[i]);
-
-                if i > 0 {
-                    let prev = path[i - 1];
-
-                    if !edges.remove(&(path[i], prev)) {
-                        edges.insert((prev, path[i]));
-                    }
+            while let Some(n) = q.pop_front() {
+                if n == t {
+                    break;
                 }
 
-                if i < path.len() - 1 {
-                    let next = path[i + 1];
+                if coloured.contains(&n) {
+                    continue;
+                }
 
-                    if !edges.remove(&(next, path[i])) {
-                        edges.insert((path[i], next));
+                coloured.insert(n);
+                for &neigh in self.nodes.get(&n).unwrap() {
+                    if flowing.contains(&(n, neigh)) {
+                        continue;
+                    }
+
+                    q.push_back(neigh);
+
+                    if !pred.contains_key(&neigh) {
+                        pred.insert(neigh, n);
                     }
                 }
+            }
+
+            if !pred.contains_key(&t) {
+                break;
+            }
+
+            let mut path = vec![t];
+            let mut c = t;
+            while c != s {
+                let prev = pred[&c];
+                path.push(prev);
+                c = prev;
+            }
+
+            path.reverse();
+            for i in 0..(path.len() - 1) {
+                flowing.insert((path[i], path[i + 1]));
+                flowing.remove(&(path[i + 1], path[i]));
             }
         }
 
         let mut flow = 0;
-        for n in self.nodes.get(&t).unwrap() {
-            if edges.contains(&(*n, t)) {
+        for (a, b) in flowing {
+            if a == s {
                 flow += 1;
+            }
+
+            if b == s {
+                flow -= 1;
             }
         }
 

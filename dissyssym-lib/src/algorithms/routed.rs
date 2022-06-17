@@ -93,26 +93,9 @@ impl RoutedAlgorithm {
         n: usize,
     ) -> HashSet<usize> {
         let mut lock = cache.lock().unwrap();
-        let node_paths = lock.gen_routes(nodes, f, s);
-        drop(lock);
-
-        let mut routes = HashSet::new();
-        for neigh in nodes.get(&n).unwrap() {
-            for path in node_paths.get(neigh).unwrap() {
-                for i in 0..(path.len() - 1) {
-                    if path[i] != n {
-                        continue;
-                    }
-
-                    if path[i + 1] == s {
-                        continue;
-                    }
-
-                    routes.insert(path[i + 1]);
-                }
-            }
+        match lock.gen_routes(nodes, f, s).get(&n) {
+            Some(routes) => routes.clone(),
+            None => panic!("Failed to generate routes."),
         }
-
-        routes
     }
 }
