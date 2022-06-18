@@ -1,6 +1,7 @@
 use std::{
     fs::{self, File},
     io::Write,
+    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -17,12 +18,17 @@ use tokio::time::Instant;
 async fn main() {
     let mut entries = fs::read_dir("./topologies")
         .expect("Failed to read topologies dir.")
-        .map(|res| res.map(|e| e.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .expect("Failed to collect directory entries.");
+        .map(|res| res.unwrap().path())
+        .filter(|p| {
+            let file = p.file_name().unwrap().to_str().unwrap();
+            let mut split = file.split("-");
+            let n = split.next().unwrap().parse::<usize>().unwrap();
+            n <= 20
+        })
+        .collect::<Vec<PathBuf>>();
     entries.sort();
 
-    let cache = Arc::new(Mutex::new(RouteCache::new()));
+    let cache = Arc::new(Mutex::new(RouteCache::new(String::from("pathfind"))));
     let handle = tokio::runtime::Handle::current();
     let _ = handle.enter();
 
@@ -37,49 +43,47 @@ async fn main() {
                 None => break,
             };
 
-            for i in 0..5 {
-                let resf = handle.block_on(run_simulation::<FloodingAlgorithm>(
-                    top.clone(),
-                    cache.clone(),
-                ));
-                let resr = handle.block_on(run_simulation::<RoutedAlgorithm>(
-                    top.clone(),
-                    cache.clone(),
-                ));
+            let resf = handle.block_on(run_simulation::<FloodingAlgorithm>(
+                top.clone(),
+                cache.clone(),
+            ));
+            let resr = handle.block_on(run_simulation::<RoutedAlgorithm>(
+                top.clone(),
+                cache.clone(),
+            ));
 
-                let resf = match resf {
-                    Some(r) => r,
-                    None => continue,
-                };
-                let resr = match resr {
-                    Some(r) => r,
-                    None => continue,
-                };
+            let resf = match resf {
+                Some(r) => r,
+                None => continue,
+            };
+            let resr = match resr {
+                Some(r) => r,
+                None => continue,
+            };
 
-                let result = format!(
-                    "[n: {}, f: {}, c: {}, i: {}] f: d {}%, m {}, t: {} | r: d {}%, m {}, t: {}\n",
-                    top.get_n(),
-                    top.get_faulty().len(),
-                    top.get_c(),
-                    i,
-                    resf.delivered,
-                    resf.messages,
-                    resf.duration.as_millis(),
-                    resr.delivered,
-                    resr.messages,
-                    resr.duration.as_millis()
-                );
-
-                results.lock().unwrap().write(result.as_bytes()).unwrap();
-                print!("{}", result);
-
-                *totalf.lock().unwrap() += resf.messages;
-                *totalr.lock().unwrap() += resr.messages;
-
-                if resf.delivered < 99.995 || resr.delivered < 99.995 {
-                    panic!("oh no, delivery is bad again :(");
-                }
+            if resf.delivered < 99.995 || resr.delivered < 99.995 {
+                panic!("oh no, delivery is bad again :(");
             }
+
+            let result = format!(
+                "[n: {}, f: {}, c: {}, i: {}] f: d {}%, m {}, t: {} | r: d {}%, m {}, t: {}\n",
+                top.get_n(),
+                top.get_faulty().len(),
+                top.get_c(),
+                0,
+                resf.delivered,
+                resf.messages,
+                resf.duration.as_millis(),
+                resr.delivered,
+                resr.messages,
+                resr.duration.as_millis()
+            );
+
+            results.lock().unwrap().write(result.as_bytes()).unwrap();
+            print!("{}", result);
+
+            *totalf.lock().unwrap() += resf.messages;
+            *totalr.lock().unwrap() += resr.messages;
         }
     });
 
@@ -100,13 +104,14 @@ async fn run_simulation<T: Algorithm + Send + Sync + 'static>(
     };
 
     let now = Instant::now();
-    // Broadcast a message from a random sender.
     let mut rng = rand::thread_rng();
+
     let sender = graph
         .get_nodes()
         .choose(&mut rng)
         .expect("Failed to get random node.")
         .clone();
+
     let sender_id = sender.read().await.get_label();
     graph
         .broadcast(sender, Message::new(sender_id, "msg".to_string()))

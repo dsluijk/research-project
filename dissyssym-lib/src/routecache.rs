@@ -9,15 +9,15 @@ use sha2::{Digest, Sha512};
 
 use crate::topology::FlowGraph;
 
-const GENERATION_METHOD: &str = "pathfind";
-
 pub struct RouteCache {
+    method: String,
     cache: HashMap<String, Option<Arc<HashMap<usize, HashSet<usize>>>>>,
 }
 
 impl RouteCache {
-    pub fn new() -> Self {
+    pub fn new(method: String) -> Self {
         RouteCache {
+            method,
             cache: HashMap::new(),
         }
     }
@@ -33,7 +33,7 @@ impl RouteCache {
         match self.cache.get(&hash) {
             Some(routes) => routes.clone(),
             None => {
-                let routes = match Self::gen_routes_uncached(nodes, f, s) {
+                let routes = match self.gen_routes_uncached(nodes, f, s) {
                     Some(r) => Some(Arc::new(r)),
                     None => None,
                 };
@@ -45,11 +45,12 @@ impl RouteCache {
     }
 
     pub fn gen_routes_uncached(
+        &self,
         nodes: &HashMap<usize, HashSet<usize>>,
         f: usize,
         s: usize,
     ) -> Option<HashMap<usize, HashSet<usize>>> {
-        match GENERATION_METHOD {
+        match self.method.as_str() {
             "pathfind" => Self::gen_method_pathfind(nodes, f, s),
             "unreliable" => Self::gen_method_unreliable(nodes, f, s),
             _ => panic!("Invalid path generation method!"),

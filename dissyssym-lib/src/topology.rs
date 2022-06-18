@@ -13,6 +13,7 @@ use tokio::fs::read_to_string;
 #[derive(Debug, Clone)]
 pub struct Topology {
     n: usize,
+    c: usize,
     edges: Vec<(usize, usize)>,
     faulty: Vec<usize>,
 }
@@ -27,6 +28,7 @@ impl Topology {
         }
 
         self.n = n;
+        self.c = c;
         let mut rng = thread_rng();
         let mut attempt = 0;
 
@@ -99,14 +101,21 @@ impl Topology {
         }
 
         let n = uniques.len();
-        if Self::connectivity(&edges, n) <= f {
+        let c = Self::connectivity(&edges, n);
+
+        if c <= f {
             return None;
         }
 
         let mut rng = thread_rng();
         let faulty = (0..n).choose_multiple(&mut rng, f);
 
-        Some(Self { n, edges, faulty })
+        Some(Self {
+            n,
+            c,
+            edges,
+            faulty,
+        })
     }
 
     pub fn get_edges(&self) -> Vec<(usize, usize)> {
@@ -122,7 +131,7 @@ impl Topology {
     }
 
     pub fn get_c(&self) -> usize {
-        Self::connectivity(&self.edges, self.get_n())
+        self.c
     }
 
     fn try_generate(rng: &mut ThreadRng, n: usize, d: usize) -> Option<Vec<(usize, usize)>> {
@@ -222,6 +231,7 @@ impl Default for Topology {
     fn default() -> Self {
         Self {
             n: 0,
+            c: 0,
             edges: Vec::new(),
             faulty: Vec::new(),
         }

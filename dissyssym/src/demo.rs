@@ -12,7 +12,7 @@ async fn main() {
     topology.write("./topology.txt");
 
     let topology = Arc::new(topology);
-    let cache = Arc::new(Mutex::new(RouteCache::new()));
+    let cache = Arc::new(Mutex::new(RouteCache::new(String::from("unreliable"))));
 
     let mut g1: Graph<FloodingAlgorithm> =
         Graph::new(topology.clone(), cache.clone()).await.unwrap();
