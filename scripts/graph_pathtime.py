@@ -52,7 +52,7 @@ for f in path_results:
 
     axs[1].plot(x, y, label=str(path_results[f]))
 
-axs[0].set_title("Fast Algoritm")
+axs[0].set_title("Fast Algorithm")
 axs[0].set_xlabel('Node count (n)')
 axs[0].set_ylabel('Latency (ms)')
 axs[0].set_yscale('log')
