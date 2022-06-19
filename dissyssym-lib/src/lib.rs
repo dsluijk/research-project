@@ -9,4 +9,4 @@ mod topology;
 pub use graph::Graph;
 pub use message::Message;
 pub use routecache::RouteCache;
-pub use topology::Topology;
+pub use topology::{FlowGraph, Topology};

@@ -10,9 +10,6 @@ lines = f.readlines()
 flood_results = {}
 routed_results = {}
 
-count_8 = 0
-count_17 = 0
-
 for line in lines:
     parsed = parse(TEMPLATE, line.replace("\n", ""))
     (n, f, c, i, fd, fm, ft, rd, rm, rt) = parsed
