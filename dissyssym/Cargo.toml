@@ -19,6 +19,10 @@ path = "src/simulate.rs"
 name = "pathtime"
 path = "src/pathtime.rs"
 
+[[bin]]
+name = "failure"
+path = "src/failure.rs"
+
 [dependencies]
 dissyssym-lib = { path = "../dissyssym-lib" }
 tokio = { version = "1.18.2", features = ["full"] }
