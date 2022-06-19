@@ -18,10 +18,10 @@ for line in lines:
 
     if a == "f":
         fast_x.append(n)
-        fast_y.append(f)
+        fast_y.append(c)
     else:
         path_x.append(n)
-        path_y.append(f)
+        path_y.append(c)
 
 plt.scatter(fast_x, fast_y, label="Fast Algorithm")
 plt.scatter(path_x, path_y, label="Pathfind Algorithm")

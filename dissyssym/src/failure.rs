@@ -31,6 +31,9 @@ async fn main() {
     let handle = tokio::runtime::Handle::current();
     let _ = handle.enter();
 
+    let total = Arc::new(Mutex::new(0));
+    let fails_p = Arc::new(Mutex::new(0));
+    let fails_f = Arc::new(Mutex::new(0));
     let results = Mutex::new(File::create("./failures.data").unwrap());
 
     entries.par_iter().for_each(|path| {
@@ -50,6 +53,8 @@ async fn main() {
                 cache_f.clone(),
             ));
 
+            *total.lock().unwrap() += 1;
+
             if !resr_p {
                 let result = format!(
                     "n: {}, f: {}, c: {}, a: p\n",
@@ -58,6 +63,7 @@ async fn main() {
                     top.get_c()
                 );
 
+                *fails_p.lock().unwrap() += 1;
                 results.lock().unwrap().write(result.as_bytes()).unwrap();
                 print!("{}", result);
             }
@@ -70,11 +76,19 @@ async fn main() {
                     top.get_c()
                 );
 
+                *fails_f.lock().unwrap() += 1;
                 results.lock().unwrap().write(result.as_bytes()).unwrap();
                 print!("{}", result);
             }
         }
     });
+
+    println!(
+        "Total: {} | P Fails: {} | F Fails: {}",
+        total.lock().unwrap(),
+        fails_p.lock().unwrap(),
+        fails_f.lock().unwrap(),
+    )
 }
 
 async fn run_simulation<T: Algorithm + Send + Sync + 'static>(
